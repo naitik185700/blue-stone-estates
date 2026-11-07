@@ -1,16 +1,19 @@
 #!/bin/bash
 set -e
 
+DOMAIN="bluestone.guardianfinancialexperts.com"
+SERVER_IP="187.127.188.22"
+
 echo "=========================================================="
-echo "  Deploying BlueStone Estates on 187.127.188.22"
+echo "  Deploying BlueStone Estates on $DOMAIN ($SERVER_IP)"
 echo "=========================================================="
 
 # 1. Update system
 sudo apt update && sudo apt upgrade -y
 
-# 2. Install Node.js 20, Git, and Nginx
+# 2. Install Node.js 20, Git, Nginx, Certbot
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs git nginx ufw
+sudo apt install -y nodejs git nginx ufw certbot python3-certbot-nginx
 
 # 3. Install PM2 globally
 sudo npm install -g pm2
@@ -39,25 +42,25 @@ pm2 start npm --name "bluestone-estates" -- start
 pm2 startup | tail -n 1 | sudo bash || true
 pm2 save
 
-# 7. Configure Nginx Reverse Proxy for 187.127.188.22
-sudo bash -c 'cat > /etc/nginx/sites-available/bluestone << "EOF"
+# 7. Configure Nginx Reverse Proxy for Subdomain & IP
+sudo bash -c "cat > /etc/nginx/sites-available/bluestone << 'EOF'
 server {
     listen 80;
-    server_name 187.127.188.22;
+    server_name $DOMAIN $SERVER_IP;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection \"upgrade\";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
     }
 }
-EOF'
+EOF"
 
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo ln -sf /etc/nginx/sites-available/bluestone /etc/nginx/sites-enabled/
@@ -70,7 +73,12 @@ sudo ufw allow 80/tcp || true
 sudo ufw allow 443/tcp || true
 sudo ufw --force enable || true
 
+# 9. Automatic SSL with Certbot (if DNS is pointed)
+echo "Attempting to generate SSL certificate for $DOMAIN..."
+sudo certbot --nginx -d $DOMAIN --non-interactive --agree-tos --register-unsafely-without-email --redirect || echo "Note: Run certbot manually once DNS A-record propagation is complete."
+
 echo "=========================================================="
 echo "  SUCCESS! BlueStone Estates is live on:"
-echo "  http://187.127.188.22"
+echo "  https://$DOMAIN"
+echo "  (or http://$SERVER_IP)"
 echo "=========================================================="
