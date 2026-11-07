@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: bluestone_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: bluestone
+      POSTGRES_PASSWORD: bluestone_password_2026
+      POSTGRES_DB: bluestone_estates
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/init.sql
+
+volumes:
+  pgdata:
